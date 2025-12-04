@@ -1,0 +1,65 @@
+echo "=== STOP LIBVIRT SERVICES ==="
+sudo systemctl stop libvirtd virtlogd virtlockd
+
+echo "=== REMOVE ALL VMs ==="
+for vm in $(sudo virsh list --all --name); do
+  sudo virsh destroy $vm 2>/dev/null
+  sudo virsh undefine $vm --remove-all-storage 2>/dev/null
+done
+
+echo "=== REMOVE ALL LIBVIRT NETWORKS ==="
+for net in $(sudo virsh net-list --all --name); do
+  sudo virsh net-destroy $net 2>/dev/null
+  sudo virsh net-undefine $net 2>/dev/null
+done
+
+echo "=== PURGE LIBVIRT/QEMU ==="
+sudo apt purge -y qemu-kvm libvirt-daemon-system libvirt-clients libvirt-daemon virt-manager bridge-utils
+
+echo "=== REMOVE LIBVIRT DIRECTORIES ==="
+sudo rm -rf /etc/libvirt /var/lib/libvirt ~/.config/libvirt ~/.cache/libvirt
+
+echo "=== REMOVE ALL NETPLAN FILES ==="
+sudo rm -f /etc/netplan/*.yaml
+
+echo "=== RESET NetworkManager CONFIG ==="
+sudo rm -f /etc/NetworkManager/system-connections/*
+
+echo "=== REMOVE OLD NFS MOUNTS ==="
+sudo umount -f /mnt/nfs/kvm 2>/dev/null
+sudo umount -f /mnt/nfs/isos 2>/dev/null
+sudo rm -rf /mnt/nfs
+
+echo "=== RESTORE DEFAULT NETPLAN (DHCP) ==="
+MAIN_IF=$(ls /sys/class/net | grep -E 'enp|ens' | head -n 1)
+cat <<EOF | sudo tee /etc/netplan/00-default.yaml
+network:
+  version: 2
+  renderer: NetworkManager
+  ethernets:
+    $MAIN_IF:
+      dhcp4: true
+EOF
+
+echo "=== ENABLE NetworkManager ==="
+sudo systemctl unmask NetworkManager
+sudo systemctl enable NetworkManager
+sudo systemctl restart NetworkManager
+
+echo "=== DISABLE systemd-networkd ==="
+sudo systemctl stop systemd-networkd
+sudo systemctl disable systemd-networkd
+sudo systemctl mask systemd-networkd
+
+echo "=== APPLY NETPLAN ==="
+sudo netplan generate
+sudo netplan apply
+
+echo "=== REINSTALL LIBVIRT/QEMU CLEANLY ==="
+sudo apt update
+sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients virt-manager
+
+sudo systemctl enable libvirtd
+sudo systemctl start libvirtd
+
+echo "=== HARD RESET COMPLETED ==="

@@ -1,6 +1,6 @@
 <domain type='qemu'>
   <name>nested2</name>
-  <uuid>59e01beb-f375-4a70-9cfe-2f784446abac</uuid>
+  <uuid>f7ce162b-9cf1-4cb0-9d3f-dce5edca243c</uuid>
   <metadata>
     <libosinfo:libosinfo xmlns:libosinfo="http://libosinfo.org/xmlns/libvirt/domain/1.0">
       <libosinfo:os id="http://ubuntu.com/ubuntu/20.04"/>
@@ -40,14 +40,14 @@
       <source file='/mnt/nfs/kvm/nested2.qcow2'/>
       <backingStore/>
       <target dev='sda' bus='sata'/>
+      <boot order='1'/>
       <address type='drive' controller='0' bus='0' target='0' unit='0'/>
     </disk>
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
-      <source file='/var/lib/libvirt/boot/ubuntu-20.04.6-live-server-amd64.iso'/>
       <target dev='sdb' bus='sata'/>
       <readonly/>
-      <boot order='1'/>
+      <boot order='2'/>
       <address type='drive' controller='0' bus='0' target='0' unit='1'/>
     </disk>
     <controller type='usb' index='0' model='qemu-xhci' ports='15'>
@@ -131,10 +131,10 @@
       <address type='pci' domain='0x0000' bus='0x03' slot='0x00' function='0x0'/>
     </controller>
     <interface type='network'>
-      <mac address='52:54:00:9a:20:e0'/>
+      <mac address='52:54:00:d4:ba:53'/>
       <source network='bridge-net'/>
       <model type='virtio'/>
-      <boot order='2'/>
+      <boot order='3'/>
       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
     </interface>
     <serial type='pty'>

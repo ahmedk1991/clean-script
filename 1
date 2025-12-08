@@ -1,10 +1,73 @@
-network:
-  version: 2
-  ethernets:
-    ens18:
-      dhcp4: true
-    ens19:
-      dhcp4: false
-      addresses:
-        - 192.168.1.11/24 
 
+
+#!/bin/bash
+# kvm-node1-reset.sh
+
+echo "=== KVM NODE1 FULL RESET (192.168.1.11) ==="
+
+# 1. STOP AND REMOVE ALL VMS
+echo "1. Removing all VMs..."
+sudo virsh list --all --name | while read vm; do
+    [ -n "$vm" ] && sudo virsh destroy "$vm" 2>/dev/null
+    [ -n "$vm" ] && sudo virsh undefine "$vm" --remove-all-storage 2>/dev/null
+done
+
+# 2. REMOVE ALL STORAGE POOLS
+echo "2. Removing storage pools..."
+sudo virsh pool-list --all --name | while read pool; do
+    [ -n "$pool" ] && sudo virsh pool-destroy "$pool" 2>/dev/null
+    [ -n "$pool" ] && sudo virsh pool-undefine "$pool" 2>/dev/null
+done
+
+# 3. UNMOUNT NFS
+echo "3. Unmounting NFS..."
+sudo umount -l /mnt/nfs/kvm /mnt/nfs/isos 2>/dev/null || true
+sudo rm -rf /mnt/nfs
+
+# 4. RE-CREATE DIRECTORIES
+echo "4. Creating directories..."
+sudo mkdir -p /mnt/nfs/kvm /mnt/nfs/isos
+
+# 5. RE-MOUNT NFS (wait for NFS server)
+echo "5. Mounting NFS..."
+sudo mount 192.168.1.10:/srv/nfs/kvm /mnt/nfs/kvm
+sudo mount 192.168.1.10:/srv/nfs/isos /mnt/nfs/isos
+
+# 6. CREATE SHARED STORAGE POOL
+echo "6. Creating NFS storage pool..."
+sudo virsh pool-define-as nfs-pool netfs \
+    --source-host 192.168.1.10 \
+    --source-path /srv/nfs/kvm \
+    --target /mnt/nfs/kvm
+
+sudo virsh pool-build nfs-pool
+sudo virsh pool-start nfs-pool
+sudo virsh pool-autostart nfs-pool
+
+# 7. SET PERMISSIONS
+echo "7. Setting permissions..."
+sudo chown -R libvirt-qemu:kvm /mnt/nfs/kvm
+sudo chmod 775 /mnt/nfs/kvm
+
+# 8. DOWNLOAD ISO IF MISSING
+echo "8. Checking ISO..."
+if [ ! -f "/home/ubuntu/isos/ubuntu-22.04.5-live-server-amd64.iso" ]; then
+    echo "Downloading Ubuntu ISO..."
+    wget -O /home/ubuntu/isos/ubuntu-22.04.5-live-server-amd64.iso \
+        https://releases.ubuntu.com/22.04/ubuntu-22.04.5-live-server-amd64.iso
+fi
+
+# 9. CONFIGURE LIVE MIGRATION
+echo "9. Configuring live migration..."
+sudo sed -i 's/^#listen_tcp.*/listen_tcp = 1/' /etc/libvirt/libvirtd.conf
+sudo sed -i 's/^#auth_tcp.*/auth_tcp = "none"/' /etc/libvirt/libvirtd.conf
+echo 'LIBVIRTD_ARGS="--listen"' | sudo tee -a /etc/default/libvirtd
+sudo systemctl restart libvirtd
+
+# 10. VERIFY
+echo "10. Verification:"
+sudo virsh pool-list --all
+ls -la /mnt/nfs/kvm/
+ip addr show ens19
+
+echo "=== NODE1 READY ==="

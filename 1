@@ -1,14 +1,6 @@
 
-# Use the existing disk WITHOUT specifying size
-sudo virt-install \
-  --name nested1 \
-  --ram 2048 \
-  --vcpus 2 \
-  --disk path=/mnt/nfs/kvm/nested1.qcow2,bus=virtio \
-  --cdrom /mnt/nfs/isos/ubuntu-22.04.5-live-server-amd64.iso \
-  --network network=default \
-  --graphics vnc \
-  --noautoconsole \
-  --os-type linux \
-  --os-variant ubuntu22.04 \
-  --boot cdrom,hd
+ahmed@ahmed-Standard-PC-i440FX-PIIX-1996:~$ sudo grep -i "error\|fail\|crash" /var/log/libvirt/qemu/nested1.log 2>/dev/null | tail -20
+2025-12-08 21:23:38.758+0000: IO error device='sata0-0-0' node-name='libvirt-1-storage' reason='Input/output error'
+2025-12-08 21:23:39.257+0000: IO error device='virtio-disk0' node-name='libvirt-2-format' reason='Input/output error'
+2025-12-08 21:23:40.257+0000: IO error device='virtio-disk0' node-name='libvirt-2-format' reason='Input/output error'
+2025-12-08 21:23:41.257+0000: IO error device='virtio-disk0' node-name='libvirt-2-format' reason='Input/output error'

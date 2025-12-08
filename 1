@@ -1,7 +1,10 @@
-hmed@ahmed-Standard-PC-i440FX-PIIX-1996:/etc/netplan$ sudo netplan apply
-systemd-networkd is not running, output might be incomplete.
-Failed to reload network settings: Unit dbus-org.freedesktop.network1.service not found.
-Falling back to a hard restart of systemd-networkd.service
-ahmed@ahmed-Standard-PC-i440FX-PIIX-1996:/etc/netplan$ sudo nano 00-installer-config.yaml 
-ahmed@ahmed-Standard-PC-i440FX-PIIX-1996:/etc/netplan$ 
+network:
+  version: 2
+  ethernets:
+    ens18:
+      dhcp4: true
+    ens19:
+      dhcp4: false
+      addresses:
+        - 192.168.1.11/24
 

@@ -1,40 +1,49 @@
-
-
 #!/bin/bash
-# kvm-node1-reset.sh
+# kvm-node2-reset.sh
 
-echo "=== KVM NODE1 FULL RESET (192.168.1.11) ==="
+echo "=== KVM NODE2 FULL SETUP (192.168.1.12) ==="
 
-# 1. STOP AND REMOVE ALL VMS
-echo "1. Removing all VMs..."
+# 1. Cleanup VMs
 sudo virsh list --all --name | while read vm; do
     [ -n "$vm" ] && sudo virsh destroy "$vm" 2>/dev/null
     [ -n "$vm" ] && sudo virsh undefine "$vm" --remove-all-storage 2>/dev/null
 done
 
-# 2. REMOVE ALL STORAGE POOLS
-echo "2. Removing storage pools..."
-sudo virsh pool-list --all --name | while read pool; do
-    [ -n "$pool" ] && sudo virsh pool-destroy "$pool" 2>/dev/null
-    [ -n "$pool" ] && sudo virsh pool-undefine "$pool" 2>/dev/null
-done
+# 2. Cleanup storage pools
+sudo virsh pool-destroy nfs-pool 2>/dev/null || true
+sudo virsh pool-undefine nfs-pool 2>/dev/null || true
 
-# 3. UNMOUNT NFS
-echo "3. Unmounting NFS..."
+# 3. Unmount and cleanup directories
 sudo umount -l /mnt/nfs/kvm /mnt/nfs/isos 2>/dev/null || true
 sudo rm -rf /mnt/nfs
+sudo mkdir -p /mnt/nfs/{kvm,isos}
 
-# 4. RE-CREATE DIRECTORIES
-echo "4. Creating directories..."
-sudo mkdir -p /mnt/nfs/kvm /mnt/nfs/isos
+# 4. Configure fstab
+echo "Configuring /etc/fstab..."
+# Backup existing fstab
+sudo cp /etc/fstab /etc/fstab.backup.$(date +%Y%m%d)
 
-# 5. RE-MOUNT NFS (wait for NFS server)
-echo "5. Mounting NFS..."
-sudo mount 192.168.1.10:/srv/nfs/kvm /mnt/nfs/kvm
-sudo mount 192.168.1.10:/srv/nfs/isos /mnt/nfs/isos
+# Add NFS mounts to fstab
+if ! grep -q "/mnt/nfs/kvm" /etc/fstab; then
+    echo "# NFS mounts for KVM cluster" | sudo tee -a /etc/fstab
+    echo "192.168.1.10:/srv/nfs/kvm  /mnt/nfs/kvm   nfs  defaults,_netdev,noatime,vers=4.2  0  0" | sudo tee -a /etc/fstab
+    echo "192.168.1.10:/srv/nfs/isos /mnt/nfs/isos  nfs  defaults,_netdev,noatime,vers=4.2  0  0" | sudo tee -a /etc/fstab
+fi
 
-# 6. CREATE SHARED STORAGE POOL
-echo "6. Creating NFS storage pool..."
+# 5. Mount NFS
+echo "Mounting NFS..."
+sudo mount -a
+if [ $? -eq 0 ]; then
+    echo "✓ NFS mounts successful"
+else
+    echo "✗ NFS mounts failed, checking NFS server..."
+    ping -c 2 192.168.1.10
+    showmount -e 192.168.1.10
+    exit 1
+fi
+
+# 6. Create storage pool
+echo "Creating storage pool..."
 sudo virsh pool-define-as nfs-pool netfs \
     --source-host 192.168.1.10 \
     --source-path /srv/nfs/kvm \
@@ -44,30 +53,22 @@ sudo virsh pool-build nfs-pool
 sudo virsh pool-start nfs-pool
 sudo virsh pool-autostart nfs-pool
 
-# 7. SET PERMISSIONS
-echo "7. Setting permissions..."
+# 7. Set permissions
 sudo chown -R libvirt-qemu:kvm /mnt/nfs/kvm
 sudo chmod 775 /mnt/nfs/kvm
 
-# 8. DOWNLOAD ISO IF MISSING
-echo "8. Checking ISO..."
-if [ ! -f "/home/ubuntu/isos/ubuntu-22.04.5-live-server-amd64.iso" ]; then
-    echo "Downloading Ubuntu ISO..."
-    wget -O /home/ubuntu/isos/ubuntu-22.04.5-live-server-amd64.iso \
-        https://releases.ubuntu.com/22.04/ubuntu-22.04.5-live-server-amd64.iso
-fi
-
-# 9. CONFIGURE LIVE MIGRATION
-echo "9. Configuring live migration..."
+# 8. Configure live migration
+echo "Configuring live migration..."
 sudo sed -i 's/^#listen_tcp.*/listen_tcp = 1/' /etc/libvirt/libvirtd.conf
 sudo sed -i 's/^#auth_tcp.*/auth_tcp = "none"/' /etc/libvirt/libvirtd.conf
 echo 'LIBVIRTD_ARGS="--listen"' | sudo tee -a /etc/default/libvirtd
 sudo systemctl restart libvirtd
 
-# 10. VERIFY
-echo "10. Verification:"
+# 9. Verify
+echo "=== VERIFICATION ==="
 sudo virsh pool-list --all
 ls -la /mnt/nfs/kvm/
-ip addr show ens19
+mount | grep nfs
+cat /etc/fstab | grep nfs
 
-echo "=== NODE1 READY ==="
+echo "=== NODE2 READY ==="

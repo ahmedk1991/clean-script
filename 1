@@ -1,1 +1,13 @@
 
+sudo virt-install \
+  --name nested1 \
+  --memory 2048 \
+  --vcpus 2 \
+  --disk path=/mnt/nfs/kvm/nested1.qcow2,format=qcow2,bus=virtio \
+  --cdrom /mnt/nfs/isos/ubuntu-22.04.5-live-server-amd64.iso \
+  --network network=default \
+  --graphics vnc,listen=127.0.0.1 \
+  --os-type linux \
+  --os-variant ubuntu22.04 \
+  --boot cdrom,hd \
+  --noautoconsole
